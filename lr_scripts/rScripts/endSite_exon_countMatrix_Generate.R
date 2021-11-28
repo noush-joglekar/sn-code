@@ -5,12 +5,16 @@
 ## This is in order to evaluate coordination between alternative exons and transcription
 ## start and end sites
 
+## Modified 09.2021 - Keeping track of preceeding and succeeding exon boundaries
+## Modified again 09.2021 - Making sure read ends after the acceptor
+
 # Setup -----
 library(dplyr)
 library(tidyr)
 library(data.table)
 library(parallel)
 library(pbmcapply)
+library(stringr)
 
 ## Arguments -----
 # 1. All-Info file
@@ -45,62 +49,90 @@ start_end = complete_ES %>% rowwise() %>%
 	mutate(start = unlist(strsplit(Exon,"_"))[2], end = rev(unlist(strsplit(Exon,"_")))[2]) %>% 
 	as.data.frame()
 
-endSite_exon <- start_end %>%
-        separate_rows(Exon,sep = ";%;") %>% filter(Exon != "") %>% 
-	group_by(Read) %>% add_count() %>% filter(n>=3) %>% slice(2:(n()-1)) %>%  ## internal exons only
-	as.data.frame() %>% 
-	select(all_of(endSite),Exon) %>% distinct() %>%
+precursorDF <- start_end %>%
+	separate_rows(Exon,sep = ";%;") %>% filter(Exon != "") %>%
+	group_by(Read) %>% mutate(PrevExon = lag(Exon), NextExon = lead(Exon)) %>% 
+	na.omit() %>% ungroup() %>% rowwise() %>%		## automatically selects internal exons only
+	mutate(donor=unlist(strsplit(PrevExon,"_"))[3],
+		acceptor=unlist(strsplit(NextExon,"_"))[2] ) %>% 
+	select(-c(PrevExon,NextExon)) %>% 
+	as.data.frame()
+
+longEnoughReads <- precursorDF %>% group_by(.dots = groupVar[3], Gene, Exon) %>%
+	mutate(md=min(donor), ma = max(acceptor)) %>% filter(start < md & end > ma) %>% ungroup()
+
+endSite_exon <- longEnoughReads %>% select(all_of(endSite),Exon,donor,acceptor) %>% distinct() %>%
 	separate(endSite, into = c("chr","es_s","es_e","strand"), sep ="_", remove=FALSE) %>%
-	separate(Exon, into = c("chr_e","s","e","strand_e"), sep ="_", remove=FALSE) %>%
-	mutate_at(c("es_s","es_e","s","e"),as.numeric) %>%
-	mutate(status = case_when(endSite == "TSS" & strand == "-" & es_e >= e ~ "correct",	## CAN CHANGE TO OVERLAP WINDOW
-			endSite == "TSS" & strand == "+" & es_s <= s ~ "correct",	## 5-->3 "+" TSS - Exon - PolyA
-			endSite == "PolyA" & strand == "-" & es_s >= s ~ "correct",	## 3-->5 "-" PolyA - Exon - TSS
-			endSite	== "PolyA" & strand == "+" & e <= es_e ~ "correct",
+	mutate_at(c("es_s","es_e","donor","acceptor"),as.numeric) %>%
+	mutate(status = case_when(endSite == "TSS" & strand == "-" & es_s >= acceptor ~ "correct",	
+			endSite == "TSS" & strand == "+" & es_e <= donor ~ "correct",	## 5-->3 "+" TSS - Donor - Exon - Acceptor - PolyA
+			endSite == "PolyA" & strand == "-" & donor >= es_e ~ "correct",	## 3-->5 "-" PolyA - Donor - Exon - Acceptor - TSS
+			endSite	== "PolyA" & strand == "+" & acceptor <= es_s ~ "correct",
 			TRUE ~ "incorrect")) %>%
 	filter(status == "correct") %>%
-	select(all_of(endSite),Exon)
+	select(all_of(endSite),Exon, donor, acceptor,es_s,es_e,strand)
 
-getCounts <- function(es, start_end, endSite_exon){
-	data_subset = start_end %>% filter(.[[endSite]] == es) %>% 
-		select(-Read) %>% group_by_all() %>% summarize(n=n(),.groups='keep') %>% 
-		mutate_at(c("start","end"),as.numeric) %>% as.data.frame()
-	exonList = as.vector(endSite_exon %>% filter(.[[endSite]] == es) %>% 
-		select(Exon) %>% as.matrix())
-	dd = list()
-	for(exon in exonList){
-		d = list()
-		ix = 1
-		for(r in 1:nrow(data_subset)){
-			l = NULL
-			if(grepl(exon,data_subset[r,]$Exon)){	## If exon present add count to inclusion
-				l = c(as.matrix(data_subset[r,groupVar[-c(1,length(groupVar))]]),exon,data_subset$n[r],'0')
-			} else if (!grepl(exon,data_subset[r,]$Exon)){		## Else check if exon chain spans exon
-				s = as.integer(unlist(strsplit(exon,"_"))[2])
-				e = as.integer(unlist(strsplit(exon,"_"))[3])
-				if(data_subset[r,]$start <= s & data_subset[r,]$end >= e){	## If it does, add count to exclusion
-					l = c(as.matrix(data_subset[r,groupVar[-c(1,length(groupVar))]]),exon,'0',data_subset$n[r])} 
-			}
-			if(!is.null(l)){
-	                	d[[ix]] = l
-				ix = ix + 1}
-		}
-	dd[[exon]] = do.call("rbind",d)
+## have to add something in here for exclusion counts where the read has to start before the min donor and end after 
+## the min acceptor
+
+#X = dim(a %>% group_by(Exon) %>% filter(Exon == exon) %>% 
+#mutate_at(c("start","end","donor","acceptor"),as.numeric) %>% 
+#mutate(md = min(donor), ma = max(acceptor)) %>% filter(start <= md & end >= ma) %>% as.data.frame())
+
+filterIneligiblePairs <- function(eS_e,df){
+	if((eS_e$strand[1] == "+" & endSite == "TSS") || (eS_e$strand[1] == "-" & endSite == "PolyA") ){
+		conservativePairs <- left_join(df, eS_e, by = c(endSite,'Exon')) %>% 
+			group_by(Exon) %>% slice_min(n = 1, order_by = donor) %>%
+			filter(es_e <= donor) %>% as.data.frame()
+	} else if ((eS_e$strand[1] == "-" & endSite == "TSS") || (eS_e$strand[1] == "+" & endSite == "PolyA")){
+		conservativePairs <- left_join(df, eS_e, by = c(endSite,'Exon')) %>%
+                       	group_by(Exon) %>% slice_max(n = 1, order_by = acceptor) %>%
+                       	filter(es_s >= acceptor) %>% as.data.frame()
 	}
-	df = plyr::ldply(unname(dd), data.frame)
-	colnames(df) = c(groupVar[-1],"Inclusion","Exclusion")
-	df <- df %>% mutate_at(c("Inclusion","Exclusion"),as.vector) %>% 
-		mutate_at(c("Inclusion","Exclusion"),as.numeric) %>%
-		group_by_at(groupVar[-1]) %>% 
-		summarize(Inclusion = sum(Inclusion), Exclusion = sum(Exclusion),.groups='keep')
-        return(df)
+	return(conservativePairs)
 }
 
-print("Extracting counts, might take a while")
-bigList <- pbmclapply(unique(endSite_exon[,endSite]),function(es) getCounts(es,start_end,endSite_exon),
+
+getCounts <- function(es, start_end, endSite_exon, longEnoughReads, args){
+	data_subset <- start_end %>% filter(.[[endSite]] == es & Read %in% longEnoughReads$Read) %>% 
+		select(-Read) %>% group_by_all() %>% summarize(n=n(),.groups='keep') %>% 
+		mutate_at(c("start","end"),as.numeric) %>% as.data.frame()
+	exonList <- as.vector(endSite_exon %>% filter(.[[endSite]] == es) %>% 
+		select(Exon) %>% as.matrix())
+	eS_e <- endSite_exon %>% filter(.[[endSite]] == es)
+	dd = list()
+	for(exon in exonList){
+		inCounts <- data_subset %>% filter(grepl(exon,Exon)) %>%
+			group_by(.dots = groupVar[3]) %>% summarize(Inclusion = sum(n),.groups='keep') %>%
+			mutate(Exon = exon)
+		exCounts <- data_subset %>% filter(!grepl(exon,Exon)) %>%
+			group_by(.dots = groupVar[3]) %>% mutate(exon = exon) %>%
+			separate(exon, into = c("chr_e","s","e","strand_e"), sep ="_") %>%
+			mutate_at(c("start","end","s","e"),as.numeric) %>%
+			filter(start <= s & end >= e) %>% summarize(Exclusion = sum(n),.groups='keep') %>%
+			mutate(Exon = exon)
+		if(args[3] == "Celltype"){
+			dd[[exon]] <- full_join(inCounts,exCounts,by = c("Celltype", "Exon")) %>% replace(is.na(.),0)
+		} else {
+			dd[[exon]] <- full_join(inCounts,exCounts,by = groupVar[-c(1:2)]) %>% replace(is.na(.),0)
+		}
+	}
+	df = plyr::ldply(unname(dd), data.frame)
+	df$Gene <- data_subset$Gene[1]
+	df[,endSite] <- data_subset[1,endSite]
+	eligPairs <- filterIneligiblePairs(eS_e,df)
+	return(eligPairs)
+}
+
+
+bigList <- pbmclapply(unique(unname(unlist(endSite_exon[,endSite]))),function(es) getCounts(es,start_end,endSite_exon,longEnoughReads,args),
 		mc.cores = nThreads,ignore.interactive = TRUE)
 
-print("Converting to dataframe and writing output")
+print("Converting to dataframe")
 bigDF <- as.data.frame(data.table::rbindlist(bigList))
+
+
+print("Writing output to file")
 data.table::fwrite(bigDF, file = paste0("inclusionExclusionCounts_",endSite,"by_",args[3],"_",rpg,"readsPerGene",".gz"),
 	sep = "\t", quote = FALSE, row.names = FALSE, compress="gzip")
+ 

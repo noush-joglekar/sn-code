@@ -2,6 +2,8 @@
 # By Anoushka Joglekar 02.2021
 # Modified 04.2021
 # ChiSq test of association of end-site and exon 
+# Modified 09.2021
+# Making sure that only the necessary things are being tested
 
 library(dplyr)
 library(tidyr)
@@ -30,10 +32,12 @@ perCT <- function(countMatrix,args,outCT){
 
 	countDF <- countMatrix %>% filter(Exon %in% eligible$Exon)
 	
-	allIter = pbmclapply(eligible$Exon, function(e) getChiSq(e, countDF),
+	allIter = pbmclapply(eligible$Exon, function(e) getChiSq(e, countDF, endSiteType),
 			mc.cores = nThreads,ignore.interactive = TRUE)
-	counts = rbindlist(do.call( rbind, allIter)[,1])
-	results = rbindlist(do.call( rbind, allIter)[,2])
+
+	counts = rbindlist(do.call( rbind, allIter)[,1]) %>% select(-c(donor,acceptor,es_s,es_e,strand))
+	a = do.call( rbind, allIter)[,2]
+	results = rbindlist(purrr::map(a, ~ purrr::compact(.)) %>% purrr::keep(~length(.) != 0))
 	eV = rbindlist(do.call( rbind, allIter)[,3])
 	write.table(eV, file.path(outDir,paste0(args[2],"_ExonCoord_",outCT,"_expValues")),
                         quote = FALSE, row.names = FALSE, sep = "\t")
@@ -61,49 +65,65 @@ perCT <- function(countMatrix,args,outCT){
 	}
 }
 
-
-getChiSq <- function(exon, countDF){
-	mat <- countDF %>% filter(Exon == exon) %>%
-		select(Inclusion,Exclusion)
-	criterionStatus = chisq_criterion(mat)
-	ev = criterionStatus[[2]]
-	cons = criterionStatus[[3]]
-	if (criterionStatus[[1]]=="True"){
-		pVal <- chisq.test(mat)$p.value
-		loR <- logOddsCalc(mat)
-		pi = mat$Inclusion/sum(mat$Inclusion)
-		pe = mat$Exclusion/sum(mat$Exclusion)
-		mat$dPI = pi-pe
-		if (sum(as.numeric(as.character(mat$dPI))[1:2]) == 0){
-			ix = sample(c(1,2),1,0.5)
-		} else {ix = which(abs(mat$dPI) == max(abs(mat$dPI)) )}
-		dPSI = mat$dPI[ix]	
-		subDF = countDF %>% filter(Exon == exon)
-		subDF$dPI = mat$dPI
-		subDF$pval = pVal
-		res = data.frame("Gene" = subDF$Gene[1],
-				"Exon" = exon,
-				"dPSI"= dPSI,
-				"pval"= pVal,
-				"logOddsRatio" = loR,
-				"nrow" = nrow(mat))
-		expVal = data.frame("Gene" = subDF$Gene[1],
-                                "Exon" = exon,
-                                "EV" = ev,
-				"cons" = cons,
-                               	"nrow" = nrow(mat))
-		return(list(subDF,res,expVal))
-	} else {
-		res = NULL
-		subDF = NULL
-		m = countDF %>% filter(Exon == exon)
-		expVal = data.frame("Gene" = m$Gene[1],
-				"Exon" = exon,
-				"EV" = ev,
-				"cons" = cons,
-				"nrow" = nrow(mat))
-		return(list(subDF,res,expVal))
+filterIneligibleES <- function(mat,endSiteType){
+	if((endSiteType == "TSS" & mat$strand[1] == "+") || (endSiteType == "PolyA" & mat$strand[1] == "-")){
+		mat = mat %>% filter(es_e <= min(donor)) %>% group_by_at(endSiteType) %>%
+			slice_min(n = 1, order_by = "donor") %>% as.data.frame()
+	} else if ((endSiteType == "TSS" & mat$strand[1] == "-") || (endSiteType == "PolyA" & mat$strand[1] == "+")){
+		mat = mat %>% filter(es_s >= max(acceptor)) %>% group_by_at(endSiteType) %>%
+			slice_max(n = 1, order_by = "acceptor") %>% as.data.frame()
 	}
+	if(nrow(mat) >= 2){
+		return(mat)
+	} else {
+		return(NULL)}
+}
+
+getChiSq <- function(exon, countDF, endSiteType){
+	mat <- countDF %>% filter(Exon == exon) 
+	newMat <- filterIneligibleES(mat,endSiteType)
+	if(!is.null(newMat)){
+		mat = newMat %>% select(Inclusion,Exclusion)
+		criterionStatus = chisq_criterion(mat)
+		ev = criterionStatus[[2]]
+		cons = criterionStatus[[3]]
+		if (criterionStatus[[1]]=="True"){
+			pVal <- chisq.test(mat)$p.value
+			loR <- logOddsCalc(mat)
+			pi = mat$Inclusion/sum(mat$Inclusion)
+			pe = mat$Exclusion/sum(mat$Exclusion)
+			mat$dPI = pi-pe
+			if (sum(as.numeric(as.character(mat$dPI))[1:2]) == 0){
+				ix = sample(c(1,2),1,0.5)
+			} else {ix = which(abs(mat$dPI) == max(abs(mat$dPI)) )}
+			dPSI = mat$dPI[ix]	
+			subDF = newMat
+			subDF$dPI = mat$dPI
+			subDF$pval = pVal
+			res = data.frame("Gene" = subDF$Gene[1],
+					"Exon" = exon,
+					"dPSI"= dPSI,
+					"pval"= pVal,
+					"logOddsRatio" = loR,
+					"nrow" = nrow(mat))
+			expVal = data.frame("Gene" = subDF$Gene[1],
+                                	"Exon" = exon,
+                                	"EV" = ev,
+					"cons" = cons,
+                               		"nrow" = nrow(mat))
+			return(list(subDF,res,expVal))
+		} else {
+			res = NULL
+			subDF = NULL
+			m = countDF %>% filter(Exon == exon)
+			expVal = data.frame("Gene" = m$Gene[1],
+					"Exon" = exon,
+					"EV" = ev,
+					"cons" = cons,
+					"nrow" = nrow(mat))
+			return(list(subDF,res,expVal))
+		}
+	} else {return(NULL)}
 }
 
 
