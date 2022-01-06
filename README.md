@@ -1,7 +1,7 @@
 # Single-nuclei Isoform RNA sequencing (snisor-seq)
 
 This is all original code generated for processing of data described
-in the [manuscript](). Scripts for generation of figure panels will
+in our [manuscript](https://www.biorxiv.org/content/10.1101/2021.12.29.474385v1). Scripts for generation of figure panels will
 be compiled and added at a later date.
 
 For now, adding scripts for:
