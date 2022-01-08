@@ -1,11 +1,12 @@
-# **S**ingle-**n**uclei **Iso**form **R**NA **seq**uencing (SnISOr-Seq)
+# SnISOr-Seq
 
 We are interested in cell-type specific isoform expression in the brain,
 however, studies of splicing patterns are difficult to conduct in human because
 human brain tissue is often frozen, and isolating spliced RNA from frozen tissue
 is prohibitive on multiple levels.
 Using a combination of microfluidics, PCR-based artifact removal,
-target enrichment, and long-read sequencing, we developed SnISOr-Seq
+target enrichment, and long-read sequencing, we developed 
+**S**ingle-**n**uclei **Iso**form **R**NA **seq**uencing (*SnISOr-Seq*)
 and applied it to the analysis of human adult frontal cortex samples.
 This is all original code generated for processing of data described
 in our [manuscript](https://www.biorxiv.org/content/10.1101/2021.12.29.474385v1).
