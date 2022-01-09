@@ -49,7 +49,8 @@ found in the form of an R-package [ScisorWiz](https://github.com/ans4013/ScisorW
 ```bash
 
 plotGeneration
-└── figure4.R
+├── figure4.R
+└── figure5.R
 
 ```
 

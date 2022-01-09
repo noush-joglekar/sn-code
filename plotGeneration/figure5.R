@@ -134,11 +134,16 @@ untestability_byCT <- ggplot(cu_ct %>% filter(value == "cons"),
 untestability_byCT
 
 ## Panel e ------------------
-sigLevel <- format(fisher.test(as.matrix(disAs_dist_df[,2:3]))$p.value,digits = 3)
+matCounts <- as.matrix(cbind(disAs_dist_df[,2]-disAs_dist_df[,3],disAs_dist_df[,3]))
+sigLevel <- format(fisher.test(matCounts)$p.value,digits = 3)
 
 da <- ggplot(disAs_dist_df, aes(x = Association, y = Coordinated *100 / Tested, fill = Association)) +
-  geom_bar(stat = "identity") + geom_signif(annotations = sigLevel,
-                                            y_position = 38, xmin = 1, xmax = 2) +
+  geom_bar(stat = "identity") + 
+  geom_errorbar(aes(x=Association, ymin=Perc-SE, 
+                    ymax=Perc+SE),
+                width = 0.05, color = "grey50") +
+  geom_signif(annotations = sigLevel,
+              y_position = 43, xmin = 1, xmax = 2) +
   scale_fill_manual(values = c("#4D9A97","#1BB6AF")) + 
   labs(y = "Coordinated (%)", x = "Disease association") +
   theme_classic(base_size = 14)
