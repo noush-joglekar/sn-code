@@ -50,7 +50,8 @@ found in the form of an R-package [ScisorWiz](https://github.com/ans4013/ScisorW
 
 plotGeneration
 ├── figure4.R
-└── figure5.R
+├── figure5.R
+└── figure6.R
 
 ```
 
