@@ -83,6 +83,9 @@ g_oR_d =
 ### Output -----------------------
 g_oR_a | g_oR_d
 
+## Panel d ----------------
+### Run independently using ScisorWiz - code not included here 
+
 ## Panels e and f ----------------
 
 a <- bulk_exon_adj %>% filter(FDR <= 0.05)

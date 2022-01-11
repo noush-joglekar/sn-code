@@ -151,6 +151,9 @@ da <- ggplot(disAs_dist_df, aes(x = Association, y = Coordinated *100 / Tested, 
 ### Output ------------------
 da
 
+## Panel f ------------------
+### Run independently using ScisorWiz - code not included here 
+
 ## Panel g ------------------
 H.oneCT <- plotStatusDist(oneCT)
 
