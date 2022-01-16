@@ -55,5 +55,11 @@ plotGeneration
 
 ```
 
+If you want to explore this dataset and query expression of disease-associated exons
+in our human frontal cortex samples, we have made an interactive portal which allows
+you to upload lists of exons and see their cell-type specific expression. Please visit
+[isoformAtlas.com](https://isoformatlas.com/) --> Access Data --> 
+[Exons](https://noush-joglekar.shinyapps.io/snisorDisease/) to view.
+
 Feel free to [email](mailto:anj2026@med.cornell.edu) with questions
 about the data or approach
