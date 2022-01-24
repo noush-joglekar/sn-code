@@ -60,7 +60,7 @@ plotGeneration
 If you want to explore this dataset and query expression of disease-associated exons
 in our human frontal cortex samples, we have made an interactive portal which allows
 you to upload lists of exons and see their cell-type specific expression. We have uploaded
-our lists of ASD(data/ASD_asExons.txt), [ALS](data/ALS_asExons.txt), 
+our lists of [ASD](data/ASD_asExons.txt), [ALS](data/ALS_asExons.txt), 
 and [SZ-](data/Schizophrenia_asExons.txt) associated exons under the data tab. Feel free to use that as a demo 
 in the online portal. To access the portal, visit 
 [isoformAtlas.com](https://isoformatlas.com/) --> Access Data --> 
