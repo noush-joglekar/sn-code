@@ -42,13 +42,15 @@ lr_scripts
 ```
 
 In addition, to ensure maximal reproducibility,
-we have provided the input as well as code for producing panels
-the main figures in our text. Code to generate isoform plots can be
-found in the form of an R-package [ScisorWiz](https://github.com/ans4013/ScisorWiz)
+we have provided the input as well as code for producing (most) panels
+of the main figures in our text. Code to generate isoform plots can be
+found in the form of an R-package to be released soon
 
 ```bash
 
 plotGeneration
+├── figure2.R
+├── figure3.R
 ├── figure4.R
 ├── figure5.R
 └── figure6.R
@@ -58,11 +60,11 @@ plotGeneration
 If you want to explore this dataset and query expression of disease-associated exons
 in our human frontal cortex samples, we have made an interactive portal which allows
 you to upload lists of exons and see their cell-type specific expression. We have uploaded
-our [list](data/diseaseAssocExons_ASD.txt)
-of ASD associated exons under the data tab. Feel free to use that as a demo 
+our lists of ASD(data/ASD_asExons.txt), [ALS](data/ALS_asExons.txt), 
+and [SZ-](data/Schizophrenia_asExons.txt) associated exons under the data tab. Feel free to use that as a demo 
 in the online portal. To access the portal, visit 
 [isoformAtlas.com](https://isoformatlas.com/) --> Access Data --> 
 [Exons](https://noush-joglekar.shinyapps.io/snisorDisease/) to view.
 
-Feel free to [email](mailto:anj2026@med.cornell.edu) with questions
+We encourage you to [email](mailto:anj2026@med.cornell.edu) with questions
 about the data or approach
